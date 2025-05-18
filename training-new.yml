@@ -1,0 +1,36 @@
+name: training-new
+root: /home/tju/Projects
+
+
+windows:
+  - RegNetY:
+      - conda activate mtkd && python train_baseline.py --model RegNetY_400MF 
+            --data-folder ./data 
+            --batch_size 64 
+            --epochs 240 
+            --learning_rate 0.1 
+            --checkpoint-dir ./output-new-baseline-4090
+
+  - RegNetX:
+      - conda activate mtkd && python train_baseline.py --model RegNetX_400MF 
+            --data-folder ./data 
+            --batch_size 64 
+            --epochs 240 
+            --learning_rate 0.1 
+            --checkpoint-dir ./output-new-baseline-4090
+
+  - ResNet:
+      - conda activate mtkd && python train_baseline.py --model resnet32x4 
+            --data-folder ./data 
+            --batch_size 64 
+            --epochs 240 
+            --learning_rate 0.1 
+            --checkpoint-dir ./output-new-baseline-4090
+
+  - WRN:
+      - conda activate mtkd && python train_baseline.py --model wrn_28_4 
+            --data-folder ./data 
+            --batch_size 64 
+            --epochs 240 
+            --learning_rate 0.1 
+            --checkpoint-dir ./output-new-baseline-4090 

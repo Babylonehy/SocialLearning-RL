@@ -209,6 +209,7 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         optimizer.zero_grad()
         
         features, logits = model(inputs, is_feat=True) 
+        
         trans_student_features = feat_trans(features[-2])
         
         teacher_logits = []

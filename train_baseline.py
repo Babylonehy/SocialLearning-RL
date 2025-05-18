@@ -171,7 +171,7 @@ def main_worker(gpu, ngpus_per_node, opt):
         train_loader, val_loader = get_cifar100_dataloaders(opt.data_folder, batch_size=opt.batch_size, num_workers=opt.num_workers)
     else:
         raise NotImplementedError(opt.dataset)
-
+    tic = time.time()
     # routine
     for epoch in range(1, opt.epochs + 1):
 
@@ -220,7 +220,8 @@ def main_worker(gpu, ngpus_per_node, opt):
                 
                 print('saving the best model!')
                 torch.save(state, save_file)
-
+            print('Epoch Total time(hms):', time.strftime("%H:%M:%S", time.gmtime(time.time() - total_time)))
+    
     if not opt.multiprocessing_distributed or opt.rank % ngpus_per_node == 0:
         # This best accuracy is only for printing purpose.
         opt.loggerx.info('best_accuracy {:.4f}'.format(best_acc))
@@ -228,7 +229,7 @@ def main_worker(gpu, ngpus_per_node, opt):
         # save parameters
         state = {k: v for k, v in opt._get_kwargs()}
 
-
+    print('Total time(hms):', time.strftime("%H:%M:%S", time.gmtime(time.time() - total_time)))
     
 if __name__ == '__main__':
     main()

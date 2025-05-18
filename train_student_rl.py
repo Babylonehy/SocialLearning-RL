@@ -139,7 +139,7 @@ def main():
     if args.gpu is not None :
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
-    
+        
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
@@ -152,7 +152,6 @@ def main():
         ngpus_per_node = 1
     print(f'======> ngpus_per_node is {ngpus_per_node}') 
     
-
     
     if args.multiprocessing_distributed:
         args.world_size = ngpus_per_node * args.world_size 
@@ -257,6 +256,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 args.batch_size = int(args.batch_size / ngpus_per_node)
                 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
                 model = torch.nn.parallel.DistributedDataParallel(model,device_ids=[args.gpu]) 
+                # feat_trans = torch.nn.parallel.DistributedDataParallel(feat_trans, device_ids=[args.gpu])
                 for teacher in teacher_models : 
                     teacher = torch.nn.parallel.DistributedDataParallel(teacher,device_ids=[args.gpu])
                 agent = torch.nn.parallel.DistributedDataParallel(agent,device_ids=[args.gpu])
