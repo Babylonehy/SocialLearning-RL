@@ -39,6 +39,7 @@ ENV/
 output*
 checkpoint/
 mtkd-rl-output
+checkpoint*
 logs/
 *.log
 *.tar.gz
