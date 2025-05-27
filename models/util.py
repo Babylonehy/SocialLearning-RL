@@ -160,6 +160,25 @@ class CalWeight(nn.Module):
         return trans_feat_s_list, output_feat_t_list
 
 class TransFeat(nn.Module):
+    """特征转换模块，用于将学生网络的特征转换为与教师网络特征相匹配的格式。
+
+    该模块主要用于知识蒸馏过程中，将学生网络的特征图转换为与教师网络特征图相匹配的尺寸和通道数。
+    它通过动态调整特征图大小并使用嵌入层来实现特征转换。
+
+    Args:
+        feat_s_size (tuple): 学生网络特征图的尺寸，格式为 (batch_size, channels, height, width)
+        feat_t_list_size (list): 教师网络特征图尺寸列表，每个元素为 (batch_size, channels, height, width)
+
+    Attributes:
+        feat_t_list_size (list): 存储教师网络特征图尺寸的列表
+        embed{i} (Embed): 动态创建的嵌入层，用于特征转换，其中i为索引
+
+    Example:
+        >>> feat_s_size = (32, 64, 32, 32)  # 学生特征图尺寸
+        >>> feat_t_list_size = [(32, 128, 16, 16), (32, 256, 8, 8)]  # 教师特征图尺寸列表
+        >>> trans_feat = TransFeat(feat_s_size, feat_t_list_size)
+        >>> output = trans_feat(student_features)  # 转换学生特征
+    """
     def __init__(self, feat_s_size, feat_t_list_size):
         super(TransFeat, self).__init__()
         # student和teacher都用最后一层

@@ -1,13 +1,19 @@
 python train_student_rl.py \
     --data /home/tju/Projects/data\
-    --arch ShuffleV2 \
+    --student-archs resnet56 resnet20 \
     --dynamic \
-    --checkpoint-dir ./mtkd-rl-output \
+    --checkpoint-dir ./mtkd-multi-rl-output \
     --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
     --dist-backend 'nccl' \
     --world-size 1 \
     --rank 0 
-
+python train_multi_student_rl.py \
+    --data /home/tju/Projects/data\
+    --student-archs resnet56 resnet20 \
+    --dynamic \
+    --checkpoint-dir ./mtkd-multi-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --rank 0 
 python train_student_rl.py \
     --data /home/tju/Projects/data\
     --arch MobileNetV2 \
