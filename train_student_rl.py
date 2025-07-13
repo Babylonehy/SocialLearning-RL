@@ -96,7 +96,14 @@ parser.add_argument('--checkpoint-dir', default='./checkpoint', type=str, help='
 parser.add_argument('--teacher-name-list', default=['resnet32x4', 'wrn_28_4'], type=str, nargs='+', help='teacher models')
 parser.add_argument('--dataset', type=str, default='cifar100', choices=['cifar100', 'imagenet', 'tinyimagenet', 'dogs', 'cub_200_2011', 'mit67'], help='dataset')
 parser.add_argument('--trial', type=str, default='1', help='trial id')
+parser.add_argument('--debugpy', action='store_true', help='debugpy')
+parser.add_argument('--dynamic_lr', action='store_true', help="use dynamic lr")
 
+def debugpy_init():
+    import debugpy
+    debugpy.listen(5678)
+    print("Waiting for client to attach...")
+    debugpy.wait_for_client()
 
 def get_tensorboard_path(path):
     time_stamp = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -105,7 +112,11 @@ def get_tensorboard_path(path):
     return write_path
 
 def main():
+
+
     args = parser.parse_args()
+    if args.debugpy:
+        debugpy_init()
     args.teacher_name_str = "_".join(args.teacher_name_list)
     print('args.teacher_name_str', args.teacher_name_str)
     args.teacher_num = len(args.teacher_name_list)
@@ -174,7 +185,7 @@ def get_agent(teacher_models, args):
         feature_dims.append(feature[-2].size())
         policy_input_size.append(feature[-1].size(1) + logits.size(1) + 3)
         
-    agent = model_dict['PolicyTrans'](policy_input_size, teacher_num, args.dynamic).cuda()
+    agent = model_dict['PolicyTrans'](policy_input_size, teacher_num, args.dynamic,args.dynamic_lr).cuda()
     return agent, feature_dims
 
 

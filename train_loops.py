@@ -38,7 +38,12 @@ def train_agent(args, epoch, agent_state, agent_rewards, logits_agent_actions, a
         action_label = torch.ones_like(agent_pred[0]).detach()
         loss_logits = F.binary_cross_entropy(agent_pred[0], action_label, weight=rewards.unsqueeze(-1))
         loss_feature = F.binary_cross_entropy(agent_pred[1], action_label, weight=rewards.unsqueeze(-1))
+        if args.dynamic_lr:
+            action_label_lr = torch.ones_like(agent_pred[2]).detach()
+            loss_lr = F.binary_cross_entropy(agent_pred[2], action_label_lr, weight=rewards.mean())
         loss = loss_feature + loss_logits
+        if args.dynamic_lr:
+            loss = loss + loss_lr
         loss.backward()
         agent_optimizer.step()
 
@@ -187,8 +192,9 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
     top1_num = 0
     top5_num = 0
     total = 0
-
-    lr = adjust_lr(optimizer, epoch, args)
+    
+    if not args.dynamic_lr:
+        lr = adjust_lr(optimizer, epoch, args)
 
     start_time = time.time()
     criterion_ce = criterion_list[0]
@@ -199,6 +205,8 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
     agent_states = []
     logits_agent_actions = []
     feature_agent_actions = []
+    if args.dynamic_lr:
+        lr_actions = []
     agent_rewards = []
     
     for batch_idx, (inputs, targets) in enumerate(train_loader):
@@ -238,19 +246,32 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         agent_states.append(agent_state) # [bx3, bx3, bx3]
         
         with torch.no_grad():
-            logits_actions, feature_actions = agent(agent_state)
+            if args.dynamic_lr:
+                logits_actions, feature_actions,lr_action = agent(agent_state)
+            else:
+                logits_actions, feature_actions = agent(agent_state)
+        
         if epoch == 0:
             logits_actions = torch.ones_like(logits_actions).cuda(args.gpu)
             feature_actions = torch.ones_like(feature_actions).cuda(args.gpu)
+            if args.dynamic_lr:
+                lr_action = torch.ones_like(lr_action).cuda(args.gpu)
+        if args.dynamic_lr:
+            lr_action = lr_action.detach()
         logits_actions = logits_actions.detach() # batch_size x teacher_number
         feature_actions = feature_actions.detach()
 
         logits_agent_actions.append(logits_actions)
         feature_agent_actions.append(feature_actions)
-
+        
+        if args.dynamic_lr:
+            lr_actions.append(lr_action)
+        
         if args.rank == 0 and batch_idx % 10 == 0:
             #print('actions:{}'.format(str(actions)))
             args.logger.info('actions:{}'.format(str(logits_actions[0])))
+            args.logger.info('feature actions:{}'.format(str(feature_actions[0])))
+            args.logger.info('lr actions:{}'.format(str(lr_actions[0])))
             #args.logger.info('actions:{}'.format(str(logits_actions.max().item())+str(logits_actions.argmax(dim=1))))
         
         loss_cls = criterion_ce(logits, targets)
@@ -271,6 +292,8 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         loss_feat = args.feat_weight * loss_feat
         
         loss = loss_cls + loss_kd + loss_feat
+        if args.dynamic_lr:
+            lr = adjust_lr(optimizer, epoch, args,lr_ratio=lr_action.mean().item())
         loss.backward()
         optimizer.step()
 

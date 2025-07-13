@@ -138,17 +138,19 @@ class DistillKL(nn.Module):
 
 
 
-def adjust_lr(optimizer, epoch, args):
+def adjust_lr(optimizer, epoch, args,lr_ratio=None):
     cur_lr = 0.
     if args.lr_type == 'multistep':
         cur_lr = args.init_lr * 0.1 ** bisect_right(args.milestones, epoch)
     elif args.lr_type == 'cosine':
         cur_lr = args.init_lr * 0.5 * (1. + math.cos(np.pi * epoch / args.epochs))
-
+    if args.dynamic_lr and lr_ratio is not None:
+        cur_lr = args.init_lr*lr_ratio
+    
     for param_group in optimizer.param_groups:
         param_group['lr'] = cur_lr
-
         return cur_lr
+
 
 
 

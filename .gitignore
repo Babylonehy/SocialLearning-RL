@@ -70,3 +70,4 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg 
+mtkd-multi*

@@ -44,6 +44,59 @@ python train_multi_student_rl.py \
     --seed 42 \
     --gpu 0
 
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --arch resnet20 \
+    --init-lr 0.001 \
+    --dynamic \
+    --checkpoint-dir ./mtkd-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --arch resnet20 \
+    --init-lr 0.01 \
+    --dynamic \
+    --checkpoint-dir ./mtkd-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --arch resnet20 \
+    --dynamic \
+    --dynamic_lr \
+    --checkpoint-dir ./mtkd-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --arch resnet20 \
+    --init-lr 0.01 \
+    --dynamic \
+    --dynamic_lr \
+    --checkpoint-dir ./mtkd-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --debugpy \
+    --arch resnet20 \
+    --init-lr 0.1 \
+    --dynamic \
+    --dynamic_lr \
+    --checkpoint-dir ./mtkd-rl-output \
+    --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0
 NCCL_P2P_LEVEL=NVL python train_student_rl.py \
     --data /mnt/cifar \
     --arch ShuffleV2 \

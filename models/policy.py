@@ -21,7 +21,7 @@ class Policy(nn.Module):
 
 
 class PolicyTrans(nn.Module):
-    def __init__(self, input_size, teacher_num, dynamic=False):
+    def __init__(self, input_size, teacher_num, dynamic=False, dynamic_lr=False):
         super(PolicyTrans, self).__init__()
         self.teacher_num = teacher_num
         
@@ -35,12 +35,16 @@ class PolicyTrans(nn.Module):
                 nn.ReLU())
         self.logit_head = nn.Linear(128, teacher_num, bias=True)
         self.feature_head = nn.Linear(128, teacher_num, bias=True)
-                
+        
+             
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=1)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.dynamic = dynamic
+        self.dynamic_lr = dynamic_lr
+        if dynamic_lr:
+            self.lr_head = nn.Linear(128, 1, bias=True)  
         if dynamic:
             self.logit_weight_factor = torch.nn.Parameter(torch.tensor([1., 1., 1.]), requires_grad=True)
             self.feature_weight_factor = torch.nn.Parameter(torch.tensor([1., 1., 1.]), requires_grad=True)
@@ -56,7 +60,8 @@ class PolicyTrans(nn.Module):
         out1 = self.steam(all_teacher_infos)
         logit_weights = self.softmax(self.logit_head(out1))
         feature_weights = self.softmax(self.feature_head(out1))
-
+     
+        
         if self.dynamic:
             l_f = F.softmax(self.logit_weight_factor, dim=0)
             f_f = F.softmax(self.feature_weight_factor, dim=0)
@@ -66,5 +71,7 @@ class PolicyTrans(nn.Module):
             all_logit_weights = (logit_weights + weight_loss_t + weight_loss_t_s_logit_div)/ 3.
             all_feature_weights = (feature_weights + weight_loss_t + weight_loss_t_s_feat_div) / 3.
 
-
+        if self.dynamic_lr:
+            dynamic_lr = self.sigmoid(self.lr_head(out1)).mean()
+            return all_logit_weights, all_feature_weights, dynamic_lr
         return all_logit_weights,  all_feature_weights
