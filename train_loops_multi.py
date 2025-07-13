@@ -261,6 +261,49 @@ def train_multi_students(train_loader, models, criterion_list, optimizer, epoch,
                        all_logits_agent_actions[student_idx], agent, agent_optimizer)
 
 
+def train_single_student(train_loader, model, criterion_ce, optimizer, epoch, device, args):
+    model.train()
+    losses = AverageMeter('train_loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        inputs = inputs.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion_ce(outputs, targets)
+        loss.backward()
+        optimizer.step()
+        acc1 = correct_num(outputs, targets, topk=(1,))[0]
+        losses.update(loss.item(), inputs.size(0))
+        top1.update(acc1, inputs.size(0))
+    logger.info(f'Single student train epoch {epoch}: Loss {losses.avg:.4f}, Acc@1 {top1.avg:.2f}')
+    return losses.avg, top1.avg
+
+
+def train_student_with_kd(train_loader, model, teacher_model, criterion_ce, criterion_kd, optimizer, epoch, device, args, kd_T=4, kd_weight=1.0, ce_weight=1.0):
+    model.train()
+    teacher_model.eval()
+    losses = AverageMeter('train_loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        inputs = inputs.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
+        optimizer.zero_grad()
+        with torch.no_grad():
+            teacher_outputs = teacher_model(inputs)
+        outputs = model(inputs)
+        loss_ce = criterion_ce(outputs, targets)
+        loss_kd = criterion_kd(outputs, teacher_outputs)
+        loss = ce_weight * loss_ce + kd_weight * loss_kd
+        loss.backward()
+        optimizer.step()
+        acc1 = correct_num(outputs, targets, topk=(1,))[0]
+        losses.update(loss.item(), inputs.size(0))
+        top1.update(acc1, inputs.size(0))
+    logger.info(f'Student KD train epoch {epoch}: Loss {losses.avg:.4f}, Acc@1 {top1.avg:.2f}')
+    return losses.avg, top1.avg
+
+
 def test_multi_students(epoch, models, device, val_loader, criterion_ce, args, verbose=True):
     """
     Test multiple student models
