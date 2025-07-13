@@ -118,6 +118,14 @@ def main():
     warmup_epochs = int(args.epochs * args.warmup_ratio)
     num_students = len(student_models)
 
+    # 加载完整测试集
+    if args.dataset == 'cifar100':
+        _, full_val_loader = get_cifar100_dataloaders(
+            args.data, batch_size=args.batch_size, num_workers=args.workers)
+    else:
+        raise NotImplementedError('Only cifar100 with subset is supported in this demo')
+    best_full_accs = [0.] * num_students
+
     for epoch in range(1, args.epochs + 1):
         # 训练
         if epoch <= warmup_epochs:
@@ -135,7 +143,7 @@ def main():
         for s_idx, (model, val_loader, save_folder) in enumerate(zip(student_models, val_loaders, save_folders)):
             acc, acc_top5, val_loss = validate(val_loader, model, criterion_ce, args)
             args.logger.info(f"Epoch {epoch} Student{s_idx} [{args.student_archs[s_idx]}] val_acc {acc:.3f} val_loss {val_loss:.4f}")
-            # 保存最优模型
+            # 保存最优模型（子集）
             if acc > best_accs[s_idx]:
                 best_accs[s_idx] = acc
                 state = {
@@ -151,8 +159,27 @@ def main():
                     'epoch': epoch
                 }, os.path.join(save_folder, "val_best_metrics.json"))
                 args.logger.info(f"Saved best model for student{s_idx} (by acc)")
-    for s_idx, best_acc in enumerate(best_accs):
-        args.logger.info(f"Best acc for student{s_idx} [{args.student_archs[s_idx]}]: {best_acc:.4f}")
+            # 在完整测试集上评估
+            full_acc, full_acc_top5, full_val_loss = validate(full_val_loader, model, criterion_ce, args)
+            args.logger.info(f"Epoch {epoch} Student{s_idx} [{args.student_archs[s_idx]}] [Full] val_acc {full_acc:.3f} val_loss {full_val_loss:.4f}")
+            # 保存最优模型（全体测试集）
+            if full_acc > best_full_accs[s_idx]:
+                best_full_accs[s_idx] = full_acc
+                state = {
+                    'epoch': epoch,
+                    'model': model.state_dict(),
+                    'best_full_acc': best_full_accs[s_idx],
+                    'optimizer': optimizers[s_idx].state_dict(),
+                }
+                torch.save(state, os.path.join(save_folder, f"{args.student_archs[s_idx]}_best_full.pth"))
+                save_dict_to_json({
+                    'val_loss': float(full_val_loss),
+                    'val_acc': float(full_acc),
+                    'epoch': epoch
+                }, os.path.join(save_folder, "val_best_metrics_full.json"))
+                args.logger.info(f"Saved best model for student{s_idx} (by full acc)")
+    for s_idx, (best_acc, best_full_acc) in enumerate(zip(best_accs, best_full_accs)):
+        args.logger.info(f"Best acc for student{s_idx} [{args.student_archs[s_idx]}] (subset): {best_acc:.4f}, (full): {best_full_acc:.4f}")
 
 if __name__ == '__main__':
     main()
