@@ -9,7 +9,7 @@ model_list = [
 ]
 
 # overlap 比例（如 0.2 表示 20% overlap）
-overlaps = [0.2, 0.4, 0.6, 0.8]
+overlaps = [0.5]
 
 
 n = len(model_list)
