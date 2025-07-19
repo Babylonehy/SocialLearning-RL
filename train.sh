@@ -16,6 +16,15 @@ python train_baseline.py --model RegNetX_400MF \
     --learning_rate 0.1 \
     --checkpoint-dir ./output-new-baseline-4090 &
 
+python train_multiple_baselines.py --models resnet18,MobileNetV2,RegNetX_400MF \
+    --data-folder ./data \
+    --batch_size 128 \
+    --epochs 240 \
+    --learning_rate 0.1 \
+    --checkpoint-dir ./output-new-baseline \
+    --dali gpu \
+    --data-folder ./data 
+
 # Train ResNet
 python train_baseline.py --model resnet32x4 \
     --data-folder ./data \

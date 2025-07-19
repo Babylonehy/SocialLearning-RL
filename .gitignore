@@ -73,3 +73,6 @@ wheels/
 checkpoint*
 mtkd*
 output*
+warmup*
+baseline*
+wandb

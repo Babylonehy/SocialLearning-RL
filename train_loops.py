@@ -26,7 +26,7 @@ def get_actions(agent_pred):
     return actions
 
 
-def train_agent(args, epoch, agent_state, agent_rewards, logits_agent_actions, agent, agent_optimizer):
+def train_agent(args, epoch, agent_state, agent_rewards, logits_agent_actions, agent, agent_optimizer,wandb=None,student_name=None):
     agent.train()
     agent_loss = AverageMeter('agent_loss', ':.4e')
 
@@ -44,8 +44,12 @@ def train_agent(args, epoch, agent_state, agent_rewards, logits_agent_actions, a
 
         agent_loss.update(loss.item(), actions.size(0))
 
-    if args.rank == 0:
-        args.logger.info('Epoch:{}, agent Loss:{:.6f}'.format(epoch, agent_loss.avg))
+    args.logger.info('Epoch:{}, agent Loss:{:.6f}'.format(epoch, agent_loss.avg))
+    if wandb is not None:
+        wandb.log({
+            f'{student_name}/epoch': epoch,
+            f'{student_name}/agent_loss': agent_loss.avg
+        })
 
 def get_agent_state(trans_student_features, teacher_embeddings, logits, teacher_logits, targets, criterion_div):
     trans_student_embeddings = []
@@ -175,9 +179,76 @@ def train_avg(train_loader, model, criterion_list, optimizer, epoch, device,
                             acc1*100.))
 
 
-
+def train_cycle(
+    model_dataloader_dict,  # dict: {model_name: (train_loader, val_loader)}
+    model_train_dicts,      # dict: {model_name: model}
+    model_optimizer_dict,   # dict: {model_name: optimizer}
+    agent_optimizer_dict,   # dict: {model_name: agent_optimizer}
+    feat_trans_dict,        # dict: {model_name: feat_trans}
+    agent_dict,             # dict: {model_name: agent}
+    criterion_list,         # list: [ce, div, ...]
+    epoch, device, args, full_test_loader,best_acc,best_full_acc,wandb
+):
+    """
+    对每个模型轮流作为学生，其余为教师，调用train进行训练
+    """
+    model_names = list(model_train_dicts.keys())
+    criterion_ce, criterion_div = criterion_list[0], criterion_list[1]
+    for student_name in model_names:
+        print(f'########## Epoch {epoch} Model {student_name} ##########')
+        # 学生
+        student_model = model_train_dicts[student_name]
+        train_loader, _ = model_dataloader_dict[student_name]
+        optimizer = model_optimizer_dict[student_name]
+        feat_trans = feat_trans_dict[student_name]
+        agent = agent_dict[student_name]
+        agent_optimizer = agent_optimizer_dict[student_name]
+        # 教师
+        teacher_models = [
+            model_train_dicts[name]
+            for name in model_names if name != student_name
+        ]
+        # 调用train
+        train(
+            train_loader, student_model, criterion_list, optimizer, epoch, device,
+            args, agent, feat_trans, teacher_models, agent_optimizer,wandb=wandb, student_name=student_name
+        )
+        # 测试
+        _, val_loader = model_dataloader_dict[student_name]
+        acc = test(epoch, model_train_dicts[student_name], device, val_loader, criterion_ce, args)
+        acc_full  = test(epoch, model_train_dicts[student_name], device, full_test_loader, criterion_ce, args)
+        args.logger.info(f'#######Peer Learning Epoch {epoch} Model {student_name} Acc: {acc:.2f}, Full Acc: {acc_full:.2f}')
+        wandb.log({
+            'epoch': epoch,
+            f'{student_name}/acc': acc,
+            f'{student_name}/full_acc': acc_full
+        })
+        if best_acc.get(student_name, 0) < acc:
+            best_acc[student_name] = acc
+            # Save the best model
+            torch.save({
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'model': model_train_dicts[student_name].module.state_dict() if args.distributed else model_train_dicts[student_name].state_dict(),
+                'acc': acc,
+                'optimizer': model_optimizer_dict[student_name].state_dict()
+            }, os.path.join(args.checkpoint_dir, f'{student_name}_best_subset.pth.tar'))
+        if best_full_acc.get(student_name, 0) < acc_full:
+            best_full_acc[student_name] = acc_full
+            # Save the best full model
+            torch.save({
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'model': model_train_dicts[student_name].module.state_dict() if args.distributed else model_train_dicts[student_name].state_dict(),
+                'acc': acc_full,
+                'optimizer': model_optimizer_dict[student_name].state_dict()
+            }, os.path.join(args.checkpoint_dir, f'{student_name}_best_full.pth.tar'))
+    print(f'########## Epoch {epoch} Completed ##########')
+    print(f'Best Acc: {best_acc}')
+    print(f'Best Full Acc: {best_full_acc}')
+    
 def train(train_loader, model, criterion_list, optimizer, epoch, device, 
-          args, agent, feat_trans, teacher_models, agent_optimizer):
+          args, agent, feat_trans, teacher_models, agent_optimizer,wandb=None,student_name=None):
     
     train_loss = AverageMeter('train_loss', ':.4e')
     train_loss_cls = AverageMeter('train_loss_cls', ':.4e')
@@ -248,11 +319,18 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         logits_agent_actions.append(logits_actions)
         feature_agent_actions.append(feature_actions)
 
-        if args.rank == 0 and batch_idx % 10 == 0:
+        if  batch_idx % 10 == 0:
             #print('actions:{}'.format(str(actions)))
             args.logger.info('actions:{}'.format(str(logits_actions[0])))
+            if wandb is not None:
+                # logger every actions change
+                for idx in range(len(teacher_models)):
+                    wandb.log({
+                        f'{student_name}/actions_logits_teacher_{idx}': logits_actions[:, idx].mean().item(),
+                        f'{student_name}/actions_feature_teacher_{idx}': feature_actions[:, idx].mean().item(),
+                    })
             #args.logger.info('actions:{}'.format(str(logits_actions.max().item())+str(logits_actions.argmax(dim=1))))
-        
+
         loss_cls = criterion_ce(logits, targets)
         
         loss_kd = torch.tensor(0.).cuda(args.gpu)
@@ -274,7 +352,6 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         loss.backward()
         optimizer.step()
 
-        
         sample_ce_loss = F.cross_entropy(logits, targets, reduction='none')
         sample_kd_loss = torch.tensor(0.).cuda(args.gpu)
         sample_feat_loss = torch.tensor(0.).cuda(args.gpu)
@@ -301,12 +378,12 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
         top5_num += top5
         total += targets.size(0)
 
-        if args.rank == 0:
-            print('Epoch:{}, batch_idx:{}/{}, lr:{:.5f}, Duration:{:.2f}, CLS Loss:{:.2f},' 
-                'KD Loss:{:.2f}, Feature Loss:{:.2f}, Top-1 Acc:{:.2f}'.format(
-                epoch, batch_idx, len(train_loader), lr, time.time()-batch_start_time, 
-                train_loss_cls.avg, train_loss_kd.avg, train_loss_feat.avg, 
-                (top1_num/total*100.).item()))
+        print('Epoch:{}, batch_idx:{}/{}, lr:{:.5f}, Duration:{:.2f}, CLS Loss:{:.2f},' 
+            'KD Loss:{:.2f}, Feature Loss:{:.2f}, Top-1 Acc:{:.2f}'.format(
+            epoch, batch_idx, len(train_loader), lr, time.time()-batch_start_time, 
+            train_loss_cls.avg, train_loss_kd.avg, train_loss_feat.avg, 
+            (top1_num/total*100.).item()))
+
         if batch_idx % args.agent_step == 0 and batch_idx != 0:
             train_agent(args, epoch, agent_states, agent_rewards, logits_agent_actions, agent, agent_optimizer)
             agent_states = []
@@ -318,21 +395,31 @@ def train(train_loader, model, criterion_list, optimizer, epoch, device,
     acc1 = top1_num / total
     acc5 = top5_num / total
 
-    if args.rank == 0:
-        args.logger.info('Epoch:{}\t lr:{:.4f}\t Duration:{:.3f}'
-                    '\n Train_loss:{:.5f}'
-                    '\t Train_loss_cls:{:.5f}'
-                    '\t Train_loss_kd:{:.5f}'
-                    '\t Train_loss_feat:{:.5f}'
-                    '\nTrain top-1 accuracy:{:.2f}'
-                    .format(epoch, lr, time.time() - start_time,
-                            train_loss.avg,
-                            train_loss_cls.avg,
-                            train_loss_kd.avg,
-                            train_loss_feat.avg,
-                            acc1*100.))
+    args.logger.info('Epoch:{}\t lr:{:.4f}\t Duration:{:.3f}'
+                '\n Train_loss:{:.5f}'
+                '\t Train_loss_cls:{:.5f}'
+                '\t Train_loss_kd:{:.5f}'
+                '\t Train_loss_feat:{:.5f}'
+                '\nTrain top-1 accuracy:{:.2f}'
+                .format(epoch, lr, time.time() - start_time,
+                        train_loss.avg,
+                        train_loss_cls.avg,
+                        train_loss_kd.avg,
+                        train_loss_feat.avg,
+                        acc1*100.))
+    if wandb is not None:
+        wandb.log({
+            f'{student_name}/epoch': epoch,
+            f'{student_name}/train_loss': train_loss.avg,
+            f'{student_name}/train_loss_cls': train_loss_cls.avg,
+            f'{student_name}/train_loss_kd': train_loss_kd.avg,
+            f'{student_name}/train_loss_feat': train_loss_feat.avg,
+            f'{student_name}/top1_acc': acc1 * 100,
+            f'{student_name}/top5_acc': acc5 * 100
+        })
+        
     if len(agent_states) != 0:
-        train_agent(args, epoch, agent_states, agent_rewards, logits_agent_actions, agent, agent_optimizer)
+        train_agent(args, epoch, agent_states, agent_rewards, logits_agent_actions, agent, agent_optimizer,wandb,student_name=student_name)
 
 
 def test(epoch, net, device, val_loader, criterion_ce, args, verbose=True):

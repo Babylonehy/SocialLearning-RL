@@ -2,12 +2,22 @@ python train_student_rl.py \
     --data /home/tju/Projects/data\
     --arch ShuffleV2 \
     --dynamic \
+    --checkpoint-dir ./mtkd-rl-output-subset \
+    --teacher-name-list RegNetY_400MF resnet20\
+    --dist-backend 'nccl' \
+    --world-size 1 \
+    --rank 0 
+
+python train_student_rl.py \
+    --data /home/tju/Projects/data\
+    --arch ShuffleV2 \
+    --dynamic \
     --checkpoint-dir ./mtkd-rl-output \
     --teacher-name-list RegNetY_400MF RegNetX_400MF resnet32x4 wrn_28_4 \
     --dist-backend 'nccl' \
     --world-size 1 \
     --rank 0 
-    
+
 python train_student_rl.py \
     --data /home/tju/Projects/data\
     --arch MobileNetV2 \

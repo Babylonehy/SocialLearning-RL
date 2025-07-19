@@ -97,6 +97,7 @@ parser.add_argument('--teacher-name-list', default=['resnet32x4', 'wrn_28_4'], t
 parser.add_argument('--dataset', type=str, default='cifar100', choices=['cifar100', 'imagenet', 'tinyimagenet', 'dogs', 'cub_200_2011', 'mit67'], help='dataset')
 parser.add_argument('--trial', type=str, default='1', help='trial id')
 
+parser.add_argument("--debugpy", action="store_true", help="Enable debugpy for remote debugging")
 
 def get_tensorboard_path(path):
     time_stamp = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -106,6 +107,12 @@ def get_tensorboard_path(path):
 
 def main():
     args = parser.parse_args()
+    if args.debugpy:
+        import debugpy
+        debugpy.listen(5678)
+        print("Waiting for debugger to attach...")
+        # Wait for the debugger to attach before proceeding
+        debugpy.wait_for_client()
     args.teacher_name_str = "_".join(args.teacher_name_list)
     print('args.teacher_name_str', args.teacher_name_str)
     args.teacher_num = len(args.teacher_name_list)
